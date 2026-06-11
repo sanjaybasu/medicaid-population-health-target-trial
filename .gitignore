@@ -1,0 +1,14 @@
+# Never commit data, results, or manuscript
+*.parquet
+*.csv
+*.docx
+*.pdf
+*.png
+analysis_results.md
+*_maintext.md
+*_appendix.md
+cover_letter*.md
+table*.md
+__pycache__/
+*.pyc
+.DS_Store
