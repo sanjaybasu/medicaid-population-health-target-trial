@@ -31,6 +31,10 @@ no hardcoded results.
    chronic-disease treatment, behavioral-health/SUD, medication safety, transitions, social
    needs); renders eTable 9 and underlies the conceptual model (eFigure 1) → `results.json`.
    DB-dependent (pulls `pharmacy_claim` and `condition`).
+9. `07_social_needs.py` — documented health-related social needs (PRAPARE/AHC domains) by
+   transparent keyword search of free-text "meet the patient" intake notes (Lighthouse), among
+   the ~36% of the cohort with such a note; an explicit lower bound (eTable 9 social section).
+   DB-dependent (Lighthouse); note text (PHI) is processed only in aggregate.
 
 ## Notes
 - Output location is `$ARTIFACTS_DIR` (defaults to the repo root): `cache/`, `outputs/`, `results.json`.
