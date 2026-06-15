@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reproduce the analysis end-to-end. Requires Waymark coredb access for 00_pull_data.py
+# Reproduce the analysis end-to-end. Requires project coredb access for 00_pull_data.py
 # (the only DB-dependent step); all later steps run from the cached parquet in cache/.
 # ADI crosswalk: run build_zip_adi.py first (needs the two public files noted in its header) -> cache/zip_adi.csv
 set -euo pipefail
@@ -12,3 +12,4 @@ python 04_checks.py             # invariant guardrails
 python 05_secondary_analyses.py # cost (CMS 99th-pct truncation), effect by condition, ED severity, NB/hurdle -> results.json
 python 06_care_gaps.py          # care-gap taxonomy at identification (eTable 9; eFigure 1) -> results.json
 python 07_social_needs.py       # documented social needs from intake notes (eTable 9 social section) -> results.json
+python 08_revision_robustness.py # IPW full-precision CI, ATT/ATO concordance, Honest-DiD RM curve, subgroup baselines, funnel -> results.json
