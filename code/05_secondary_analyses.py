@@ -1,4 +1,4 @@
-"""Secondary analyses: acute-care cost (CMS-style truncation), effect by clinical
+"""Secondary analyses: acute-care cost (per-patient-per-month, none/95th/99th-percentile truncation), effect by clinical
 condition (with within-stratum falsification), ED severity decomposition, and
 zero-event robustness (negative-binomial + two-part hurdle). Merges results into
 results.json (eTables 2 NB rows, 6, 7, 8). DB-dependent (re-pulls the few extra
@@ -83,19 +83,23 @@ def did_rr(d, bcol, pcol, mmb="mmb", mmp="mmp", fam="poisson"):
     b, se = m.params["treat:post"], m.bse["treat:post"]
     return [round(np.exp(b), 3), round(np.exp(b-1.96*se), 3), round(np.exp(b+1.96*se), 3)]
 
-def cost_did(d, bcol, pcol):  # CMS-style: annualized per-patient, truncate at 99th pct
+def cost_pmpm(d, bcol, pcol, winsor=None):  # per-patient-per-month cost DiD; optional percentile truncation of the pooled baseline/post distribution
     w = ow_weights(d)
-    annb = d[bcol]/d.mmb.clip(lower=0.1)*12; annp = d[pcol]/d.mmp.clip(lower=0.1)*12
-    cap = np.quantile(np.concatenate([annb, annp]), 0.99); annb = np.minimum(annb, cap); annp = np.minimum(annp, cap)
-    pre = d[["person_id", "treat"]].copy(); pre["y"] = annb.values; pre["post"] = 0; pre["w"] = w
-    po = d[["person_id", "treat"]].copy(); po["y"] = annp.values; po["post"] = 1; po["w"] = w
+    pmb = d[bcol]/d.mmb.clip(lower=0.1); pmp = d[pcol]/d.mmp.clip(lower=0.1); cap = None
+    if winsor is not None:
+        cap = float(np.quantile(np.concatenate([pmb, pmp]), winsor)); pmb = np.minimum(pmb, cap); pmp = np.minimum(pmp, cap)
+    pre = d[["person_id", "treat"]].copy(); pre["y"] = pmb.values; pre["post"] = 0; pre["w"] = w
+    po = d[["person_id", "treat"]].copy(); po["y"] = pmp.values; po["post"] = 1; po["w"] = w
     s = pd.concat([pre, po], ignore_index=True)
     m = smf.wls("y ~ treat*post", data=s, weights=s.w).fit(cov_type="cluster", cov_kwds={"groups": s.person_id})
     b, se = m.params["treat:post"], m.bse["treat:post"]
-    return [round(b), round(b-1.96*se), round(b+1.96*se)]
+    r = {"pmpm": [round(b), round(b-1.96*se), round(b+1.96*se)], "p": round(m.pvalues["treat:post"], 3)}
+    if cap is not None: r["cap_per_patient_month"] = round(cap)
+    return r
 
 R = {}
-R["cost"] = {"acute_care": cost_did(lm, "acute_cost_b", "acute_cost_p"), "total": cost_did(lm, "total_cost_b", "total_cost_p")}
+R["cost"] = {nm: {w: cost_pmpm(lm, bc, pc, wv) for w, wv in [("none", None), ("p99", 0.99), ("p95", 0.95)]}
+             for nm, bc, pc in [("acute_care", "acute_cost_b", "acute_cost_p"), ("total", "total_cost_b", "total_cost_p")]}
 R["ed_severity"] = {k: did_rr(lm, k+"_b", k+"_p") for k in ["nonemerg", "pctreat", "prevtbl", "emergent"]}
 R["zero_robustness"] = {"zero_base_pct": round(100*(lm.acute_b == 0).mean()), "poisson": did_rr(lm, "acute_b", "acute_p"),
                         "negbin": did_rr(lm, "acute_b", "acute_p", fam="nb")}
@@ -113,7 +117,8 @@ allR = json.load(open(rf)) if rf.exists() else {}
 allR["secondary"] = R
 json.dump(allR, open(rf, "w"), indent=1, default=str)
 print("secondary analyses ->", rf)
-print(" cost acute/yr:", R["cost"]["acute_care"], "| total/yr:", R["cost"]["total"])
+print(" cost acute PMPM:", {w: R["cost"]["acute_care"][w]["pmpm"] for w in R["cost"]["acute_care"]})
+print(" cost total PMPM:", {w: R["cost"]["total"][w]["pmpm"] for w in R["cost"]["total"]})
 print(" ED severity:", R["ed_severity"])
 print(" zero-robustness:", R["zero_robustness"])
 print(" condition HTE:", {k: v["rr"] for k, v in cond.items()})
